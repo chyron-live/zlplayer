@@ -1,0 +1,1 @@
+{"version":3,"file":"buffering-strategy.d.ts","sourceRoot":"","sources":["../../src/buffering/buffering-strategy.ts"],"names":[],"mappings":"AAAA,OAAO,YAAY,MAAM,uBAAuB,CAAC;AACjD,MAAM,CAAC,OAAO,CAAC,QAAQ,OAAO,iBAAiB;aAC7B,UAAU,CAAC,OAAO,EAAE,YAAY,GAAG,IAAI;aACvC,KAAK,IAAI,IAAI;aACb,KAAK,IAAI,IAAI;aACb,OAAO,IAAI,IAAI;CAChC"}
