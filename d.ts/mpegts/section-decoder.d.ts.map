@@ -1,0 +1,1 @@
+{"version":3,"file":"section-decoder.d.ts","sourceRoot":"","sources":["../../src/mpegts/section-decoder.ts"],"names":[],"mappings":"AAeA,MAAM,CAAC,OAAO,OAAO,cAAc;IACjC,OAAO,CAAC,QAAQ,CAAC,GAAG,CAAS;IAC7B,OAAO,CAAC,MAAM,CAAuB;gBAElB,GAAG,EAAE,MAAM;IAIvB,MAAM,IAAI,MAAM;IAIhB,GAAG,CAAC,MAAM,EAAE,UAAU,GAAG,UAAU,EAAE,GAAG,IAAI;CA6DpD"}

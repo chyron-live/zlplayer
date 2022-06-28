@@ -1,0 +1,1 @@
+{"version":3,"file":"pes-decoder.d.ts","sourceRoot":"","sources":["../../src/mpegts/pes-decoder.ts"],"names":[],"mappings":"AAYA,MAAM,CAAC,OAAO,OAAO,UAAU;IAC7B,OAAO,CAAC,QAAQ,CAAC,GAAG,CAAS;IAC7B,OAAO,CAAC,MAAM,CAAuB;gBAElB,GAAG,EAAE,MAAM;IAIvB,MAAM,IAAI,MAAM;IAIhB,GAAG,CAAC,MAAM,EAAE,UAAU,GAAG,UAAU,EAAE,GAAG,IAAI;CAmDpD"}

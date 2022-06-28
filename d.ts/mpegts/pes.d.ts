@@ -1,0 +1,12 @@
+export declare const PES_HEADER_SIZE = 6;
+export declare const packet_start_code_prefix: (pes: Uint8Array) => number;
+export declare const stream_id: (pes: Uint8Array) => number;
+export declare const PES_packet_length: (pes: Uint8Array) => number;
+export declare const has_optional_pes_header: (pes: Uint8Array) => boolean;
+export declare const has_pts: (pes: Uint8Array) => boolean;
+export declare const has_dts: (pes: Uint8Array) => boolean;
+export declare const optional_pes_header_length: (pes: Uint8Array) => number;
+export declare const pts: (pes: Uint8Array) => number | null;
+export declare const dts: (pes: Uint8Array) => number;
+export declare const PES_packet_data: (pes: Uint8Array) => Uint8Array;
+//# sourceMappingURL=pes.d.ts.map
