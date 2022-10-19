@@ -81,6 +81,8 @@ export default class WindowDecoder extends Decoder {
   }
 
   private async onH264Emitted({ pts_timestamp, data, has_IDR }: Events[typeof EventTypes.H264_EMITTED]) {
+    console.log(this.videoDecoder?.decodeQueueSize);
+
     this.videoKeyFrameArrived ||= has_IDR;
     if (!this.videoKeyFrameArrived) { return; }
 
@@ -102,6 +104,8 @@ export default class WindowDecoder extends Decoder {
   }
 
   private async onAACEmitted({ pts_timestamp, data }: Events[typeof EventTypes.AAC_EMITTED]) {
+    console.log(this.audioDecoder?.decodeQueueSize);
+
     const encodedAudioChunk = new EncodedAudioChunk({
       type: 'key',
       timestamp: pts_timestamp * 1000000,
