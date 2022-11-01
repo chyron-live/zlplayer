@@ -22,7 +22,7 @@ export default class WorkerDecoder extends Decoder{
 
     this.worker.onmessage = ((message) => {
       const { event } = message.data;
-
+      
       switch(event) {
         case EventTypes.VIDEO_FRAME_DECODED: {
           this.emitter?.emit(PlayerEventTypes.VIDEO_FRAME_DECODED, {

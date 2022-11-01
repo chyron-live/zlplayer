@@ -52,6 +52,10 @@ const resetAudioDecoder = async () => {
 
 self.onmessage = async ({ data }) => {
   const { event } = data;
+
+  console.log('VideoDecoder.decodeQueueSize:', videoDecoder?.decodeQueueSize);
+  console.log('AudioDecoder.decodeQueueSize:', audioDecoder?.decodeQueueSize);
+
   switch(event) {
     case EventTypes.H264_EMITTED: {
       const { pts_timestamp, data: rawData, has_IDR } = data;
