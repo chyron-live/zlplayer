@@ -2,7 +2,7 @@ import EventEmitter from '../event/eventemitter';
 import { Events, EventTypes } from '../event/events';
 import Decoder from './decoder';
 
-export default class WindowDecoder extends Decoder {  
+export default class WindowDecoder extends Decoder {
   private emitter: EventEmitter | null = null;
 
   private videoDecoder: VideoDecoder | null = null;
@@ -11,11 +11,12 @@ export default class WindowDecoder extends Decoder {
 
   private readonly onH264EmittedHandler = this.onH264Emitted.bind(this);
   private readonly onAACEmittedHandler = this.onAACEmitted.bind(this);
+  private readonly onMPEG1AudioEmittedHandler = this.onMPEG1AudioEmitted.bind(this);
 
   static isSupported () {
     return window.isSecureContext && !!(window.VideoFrame) && !!(window.AudioData) && !!(window.VideoDecoder) && !!(window.AudioDecoder) && !!(window.EncodedVideoChunk) && !!(window.EncodedAudioChunk);
   }
-  
+
   public constructor() {
     super();
   }
@@ -24,11 +25,13 @@ export default class WindowDecoder extends Decoder {
     if (this.emitter) {
       this.emitter.off(EventTypes.H264_EMITTED, this.onH264EmittedHandler);
       this.emitter.off(EventTypes.AAC_EMITTED, this.onAACEmittedHandler);
+      this.emitter.off(EventTypes.MPEG1AUDIO_EMITTED, this.onMPEG1AudioEmittedHandler);
     }
 
     this.emitter = emitter;
     this.emitter.on(EventTypes.H264_EMITTED, this.onH264EmittedHandler);
     this.emitter.on(EventTypes.AAC_EMITTED, this.onAACEmittedHandler);
+    this.emitter.on(EventTypes.MPEG1AUDIO_EMITTED, this.onMPEG1AudioEmittedHandler);
   }
 
   public async init(): Promise<void> {
@@ -102,6 +105,24 @@ export default class WindowDecoder extends Decoder {
   }
 
   private async onAACEmitted({ pts_timestamp, data }: Events[typeof EventTypes.AAC_EMITTED]) {
+    const encodedAudioChunk = new EncodedAudioChunk({
+      type: 'key',
+      timestamp: pts_timestamp * 1000000,
+      data: data,
+    });
+
+    try {
+      this.audioDecoder?.decode(encodedAudioChunk);
+    } catch (e: unknown) {
+      this.emitter?.emit(EventTypes.AUDIO_DECODE_ERROR, {
+        event: EventTypes.AUDIO_DECODE_ERROR,
+        error: e,
+      });
+      this.resetAudioDecoder();
+    }
+  }
+
+  private async onMPEG1AudioEmitted({ pts_timestamp, data }: Events[typeof EventTypes.MPEG1AUDIO_EMITTED]) {
     const encodedAudioChunk = new EncodedAudioChunk({
       type: 'key',
       timestamp: pts_timestamp * 1000000,

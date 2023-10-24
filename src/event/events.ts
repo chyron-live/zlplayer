@@ -3,10 +3,12 @@ export const EventTypes = {
   AAC_PARSED: 'AAC_PARSED',
   ID3_PARSED: 'ID3_PARSED',
   ARIB_CAPTION_PARSED: 'ARIB_CAPTION_PARSED',
+  MPEG1AUDIO_PARSED: 'MPEG1AUDIO_PARSED',
   MPEG2VIDEO_PARSED: 'MPEG2VIDEO_PARSED',
 
   H264_EMITTED: 'H264_EMITTED',
   AAC_EMITTED: 'AAC_EMITTED',
+  MPEG1AUDIO_EMITTED: 'MPEG1AUDIO_EMITTED',
   MPEG2VIDEO_EMITTED: 'MPEG2VIDEO_EMITTED',
 
   VIDEO_FRAME_DECODED: 'VIDEO_FRAME_DECODED',
@@ -29,6 +31,16 @@ export type H264_PARSED_PAYLOAD = {
 
 export type AAC_PARSED_PAYLOAD = {
   event: typeof EventTypes.AAC_PARSED;
+  initPTS: number;
+  pts: number;
+  dts: number;
+  pts_timestamp: number;
+  dts_timestamp: number;
+  data: Uint8Array;
+};
+
+export type MPEG1AUDIO_PARSED_PAYLOAD = {
+  event: typeof EventTypes.MPEG1AUDIO_PARSED;
   initPTS: number;
   pts: number;
   dts: number;
@@ -88,6 +100,16 @@ export type AAC_EMITTED_PAYLOAD = {
   data: Uint8Array;
 };
 
+export type MPEG1AUDIO_EMITTED_PAYLOAD = {
+  event: typeof EventTypes.MPEG1AUDIO_EMITTED;
+  initPTS: number;
+  pts: number;
+  dts: number;
+  pts_timestamp: number;
+  dts_timestamp: number;
+  data: Uint8Array;
+};
+
 export type MPEG2VIDEO_EMITTED_PAYLOAD = {
   event: typeof EventTypes.MPEG2VIDEO_EMITTED;
   initPTS: number;
@@ -123,10 +145,12 @@ export type Events = {
   [EventTypes.AAC_PARSED]: AAC_PARSED_PAYLOAD,
   [EventTypes.ID3_PARSED]: ID3_PARSED_PAYLOAD,
   [EventTypes.ARIB_CAPTION_PARSED]: ARIB_CAPITON_PARSED_PAYLOAD,
+  [EventTypes.MPEG1AUDIO_PARSED]: MPEG1AUDIO_PARSED_PAYLOAD,
   [EventTypes.MPEG2VIDEO_PARSED]: MPEG2VIDEO_PARSED_PAYLOAD,
 
   [EventTypes.H264_EMITTED]: H264_EMITTED_PAYLOAD,
   [EventTypes.AAC_EMITTED]: AAC_EMITTED_PAYLOAD,
+  [EventTypes.MPEG1AUDIO_EMITTED]: MPEG1AUDIO_EMITTED_PAYLOAD,
   [EventTypes.MPEG2VIDEO_EMITTED]: MPEG2VIDEO_EMITTED_PAYLOAD,
 
   [EventTypes.VIDEO_FRAME_DECODED]: VIDEO_FRAME_DECODED_PAYLOAD,

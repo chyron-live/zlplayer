@@ -3,7 +3,7 @@ import EventEmitter from "../event/eventemitter";
 import PESDecoder from "../mpegts/pes-decoder";
 import SectionDecoder from "../mpegts/section-decoder";
 
-import { 
+import {
   pid,
   has_pcr,
   pcr,
@@ -11,12 +11,12 @@ import {
   HZ
 } from "../mpegts/packet";
 
-import { 
+import {
   CRC_SIZE,
   EXTENDED_HEADER_SIZE
 } from "../mpegts/section";
 
-import { 
+import {
   has_pts,
   pts,
   has_dts,
@@ -24,36 +24,40 @@ import {
   PES_packet_data,
 } from "../mpegts/pes";
 
-import { 
+import {
   EventTypes,
 } from "../event/events";
 import { has_IDR } from "../mpegts/h264";
 
 const StreamType = {
   MPEG2: 0x02,
+  MPEG1Audio: 0x03,
   AVC1: 0x1B,
   AAC: 0x0F,
   PRIVATE_DATA: 0x06,
   ID3: 0x15
 } as const;
 
-export default class Demuxer {  
+export default class Demuxer {
   private inputReader: ReadableStreamDefaultReader<Uint8Array>;
   private emitter: EventEmitter;
 
   private PATDecoder: SectionDecoder = new SectionDecoder(0);
   private PMTDecoder: SectionDecoder | null = null;
   private VideoDecoder: PESDecoder | null = null; // H264
-  private SoundDecoder: PESDecoder | null = null; // AAC
+  private SoundDecoders: Record<number, { decoder: PESDecoder, index: number, stream_type: number }> = {}; // AAC
   private ID3Decoder: PESDecoder | null = null; // TIMED-ID3
   private ARIBCaptionDecoder: PESDecoder | null = null; // ARIB-CAPTION
   private MPEG2Decoder: PESDecoder | null = null; // MPEG2
 
   private PCR_PID: number | null = null;
   private initPTS: number | null = null;
-  private isFirstAAC: boolean = true;
+  private isFirstAudio: boolean = true;
 
-  public constructor (reader: ReadableStream<Uint8Array>, emitter: EventEmitter) {
+  private audioTrack = 0;
+
+  public constructor (reader: ReadableStream<Uint8Array>, emitter: EventEmitter, audioTrack = 0) {
+    this.audioTrack = audioTrack;
     this.inputReader = reader.getReader();
     this.emitter = emitter;
     this.pump();
@@ -73,10 +77,10 @@ export default class Demuxer {
   private reset(): void {
     this.PMTDecoder = null;
     this.VideoDecoder = null;
-    this.SoundDecoder = null;
+    this.SoundDecoders = {};
     this.ID3Decoder = null;
     this.MPEG2Decoder = null;
-    
+
     this.PCR_PID = null;
     this.initPTS = null;
   }
@@ -100,7 +104,7 @@ export default class Demuxer {
         const result = this.PATDecoder.add(packet);
         for (let i = 0; result && i < result.length; i++){
           const PAT = result[i];
-          
+
           for (let offset = EXTENDED_HEADER_SIZE; offset < PAT.length - CRC_SIZE; offset += 4) {
             const program_number = (PAT[offset + 0] << 8) | (PAT[offset + 1]);
             const PID = ((PAT[offset + 2] & 0x1F) << 8) | (PAT[offset + 3]);
@@ -121,6 +125,7 @@ export default class Demuxer {
           }
 
           const program_info_length = ((PMT[EXTENDED_HEADER_SIZE + 2] & 0x0F) << 8) | (PMT[EXTENDED_HEADER_SIZE + 3]);
+          let audioTrackCount = 0;
           for (let offset = EXTENDED_HEADER_SIZE + 4 + program_info_length; offset < PMT.length - CRC_SIZE; ) {
             const stream_type = PMT[offset + 0];
             const elementary_PID = ((PMT[offset + 1] & 0x1F) << 8) | (PMT[offset + 2]);
@@ -128,8 +133,8 @@ export default class Demuxer {
 
             if (stream_type === StreamType.AVC1 && this.VideoDecoder == null) {
               this.VideoDecoder = new PESDecoder(elementary_PID);
-            } else if (stream_type === StreamType.AAC && this.SoundDecoder == null) {
-              this.SoundDecoder = new PESDecoder(elementary_PID);
+            } else if ((stream_type === StreamType.AAC || stream_type === StreamType.MPEG1Audio) && this.SoundDecoders[elementary_PID] == null) {
+              this.SoundDecoders[elementary_PID] = { decoder: new PESDecoder(elementary_PID), index: audioTrackCount++, stream_type };
             } else if (stream_type === StreamType.ID3 && this.ID3Decoder == null) {
               this.ID3Decoder = new PESDecoder(elementary_PID);
             } else if (stream_type === StreamType.MPEG2 && this.MPEG2Decoder == null) {
@@ -178,8 +183,10 @@ export default class Demuxer {
             has_IDR: has_IDR(video)
           });
         }
-      } else if(packet_pid === this.SoundDecoder?.getPid()) {
-        const result = this.SoundDecoder!.add(packet);
+      } else if(this.SoundDecoders[packet_pid] && this.SoundDecoders[packet_pid]?.index === this.audioTrack) {
+        const { decoder, stream_type } = this.SoundDecoders[packet_pid];
+        const result = decoder.add(packet);
+
         for (let i = 0; result && i < result.length; i++){
           const sound = result[i];
 
@@ -191,17 +198,17 @@ export default class Demuxer {
           const sound_pts_elapsed_seconds: number = ((sound_pts - this.initPTS + PCR_CYCLES) % PCR_CYCLES) / HZ;
           const sound_dts_elapsed_seconds: number = ((sound_dts - this.initPTS + PCR_CYCLES) % PCR_CYCLES) / HZ;
 
-          this.emitter.emit(EventTypes.AAC_PARSED, {
-            event: EventTypes.AAC_PARSED,
+          this.emitter.emit(stream_type === StreamType.AAC ?  EventTypes.AAC_PARSED : EventTypes.MPEG1AUDIO_PARSED, {
+            event: stream_type === StreamType.AAC ? EventTypes.AAC_PARSED : EventTypes.MPEG1AUDIO_PARSED,
             initPTS: this.initPTS,
             pts: sound_pts,
             dts: sound_dts,
-            pts_timestamp: this.isFirstAAC ? 0 : sound_pts_elapsed_seconds,
-            dts_timestamp: this.isFirstAAC ? 0 : sound_dts_elapsed_seconds,
+            pts_timestamp: this.isFirstAudio ? 0 : sound_pts_elapsed_seconds,
+            dts_timestamp: this.isFirstAudio ? 0 : sound_dts_elapsed_seconds,
             data: PES_packet_data(sound)
           });
 
-          this.isFirstAAC = false;
+          this.isFirstAudio = false;
         }
       } else if(packet_pid === this.ID3Decoder?.getPid()) {
         const result = this.ID3Decoder!.add(packet);
@@ -256,7 +263,7 @@ export default class Demuxer {
 
           if (this.initPTS == null) { continue; }
           if (!has_pts(mpeg2)) { continue; }
-          
+
           const mpeg2_pts: number = pts(mpeg2)!;
           const mpeg2_dts: number = has_dts(mpeg2) ? dts(mpeg2) : mpeg2_pts;
           const mpeg2_pts_elapsed_seconds: number = ((mpeg2_pts - this.initPTS + PCR_CYCLES) % PCR_CYCLES) / HZ;
@@ -273,7 +280,7 @@ export default class Demuxer {
           });
         }
       }
-      
+
       return this.pump();
     })
   }

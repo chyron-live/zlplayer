@@ -4,6 +4,10 @@ let videoDecoder: VideoDecoder | null = null;
 let audioDecoder: AudioDecoder | null = null;
 let videoKeyFrameArrived: boolean = false;
 
+const aacAudioDecoderCodec = 'mp4a.40.2';
+const mpeg1AudioDecoderCodec = 'mp3'
+let currentAudioDecoderCodec = '';
+
 const resetVideoDecoder = async () => {
   videoDecoder = new VideoDecoder({
     output: (videoFrame) => {
@@ -27,7 +31,7 @@ const resetVideoDecoder = async () => {
   videoKeyFrameArrived = false;
 }
 
-const resetAudioDecoder = async () => {
+const resetAudioDecoder = async (codec = aacAudioDecoderCodec) => {
   audioDecoder = new AudioDecoder({
     output: (audioFrame) => {
       self.postMessage({
@@ -43,8 +47,9 @@ const resetAudioDecoder = async () => {
       });
     },
   });
+  currentAudioDecoderCodec = codec;
   await audioDecoder.configure({
-    codec: 'mp4a.40.2',
+    codec,
     sampleRate: 48000, // TODO: Refer ADTS Header
     numberOfChannels: 2,
   });
@@ -55,16 +60,16 @@ self.onmessage = async ({ data }) => {
   switch(event) {
     case EventTypes.H264_EMITTED: {
       const { pts_timestamp, data: rawData, has_IDR } = data;
-      
+
       videoKeyFrameArrived ||= has_IDR;
       if (!videoKeyFrameArrived) { return; }
-  
+
       const encodedVideoChunk = new EncodedVideoChunk({
         type: has_IDR ? 'key' : 'delta',
         timestamp: pts_timestamp * 1000000,
         data: rawData,
       });
-  
+
       try {
         videoDecoder?.decode(encodedVideoChunk);
       } catch (e: unknown) {
@@ -76,9 +81,10 @@ self.onmessage = async ({ data }) => {
       }
       break;
     }
-    case EventTypes.AAC_EMITTED: {
+    case EventTypes.AAC_EMITTED:
+    case EventTypes.MPEG1AUDIO_EMITTED: {
       const { pts_timestamp, data: rawData } = data;
-    
+
       const encodedAudioChunk = new EncodedAudioChunk({
         type: 'key',
         timestamp: pts_timestamp * 1000000,
@@ -86,6 +92,12 @@ self.onmessage = async ({ data }) => {
       });
 
       try {
+        if (event === EventTypes.AAC_EMITTED && currentAudioDecoderCodec !== aacAudioDecoderCodec) {
+          await resetAudioDecoder(aacAudioDecoderCodec);
+        }
+        if (event === EventTypes.MPEG1AUDIO_EMITTED && currentAudioDecoderCodec !== mpeg1AudioDecoderCodec) {
+          await resetAudioDecoder(mpeg1AudioDecoderCodec);
+        }
         audioDecoder?.decode(encodedAudioChunk);
       } catch (e: unknown) {
         self.postMessage({
