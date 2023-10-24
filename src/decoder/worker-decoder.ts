@@ -5,17 +5,18 @@ import { Events, EventTypes } from './worker-decoder-events';
 import Decoder from './decoder';
 import Worker from 'worker-loader?inline=no-fallback!./decoding.worker'
 
-export default class WorkerDecoder extends Decoder{  
+export default class WorkerDecoder extends Decoder {
   private emitter: EventEmitter | null = null;
   private worker: Worker;
 
   private readonly onH264EmittedHandler = this.onH264Emitted.bind(this);
   private readonly onAACEmittedHandler = this.onAACEmitted.bind(this);
+  private readonly onMPEG1AudioEmittedHandler = this.onMPEG1AudioEmitted.bind(this);
 
   static isSupported () {
     return window.isSecureContext && !!(window.VideoFrame) && !!(window.AudioData) && !!(window.VideoDecoder) && !!(window.AudioDecoder) && !!(window.EncodedVideoChunk) && !!(window.EncodedAudioChunk) && !!(window.Worker);
   }
-  
+
   public constructor() {
     super();
     this.worker = new Worker();
@@ -62,11 +63,13 @@ export default class WorkerDecoder extends Decoder{
     if (this.emitter) {
       this.emitter.off(PlayerEventTypes.H264_EMITTED, this.onH264EmittedHandler);
       this.emitter.off(PlayerEventTypes.AAC_EMITTED, this.onAACEmittedHandler);
+      this.emitter.off(PlayerEventTypes.MPEG1AUDIO_EMITTED, this.onMPEG1AudioEmittedHandler);
     }
 
     this.emitter = emitter;
     this.emitter.on(PlayerEventTypes.H264_EMITTED, this.onH264EmittedHandler);
     this.emitter.on(PlayerEventTypes.AAC_EMITTED, this.onAACEmittedHandler);
+    this.emitter.on(PlayerEventTypes.MPEG1AUDIO_EMITTED, this.onMPEG1AudioEmittedHandler);
   }
 
   public async init(): Promise<void> {
@@ -79,5 +82,9 @@ export default class WorkerDecoder extends Decoder{
 
   private async onAACEmitted(payload: PlayerEvents[typeof PlayerEventTypes.AAC_EMITTED]) {
     this.worker.postMessage(payload as Events[typeof EventTypes.AAC_EMITTED]);
+  }
+
+  private async onMPEG1AudioEmitted(payload: PlayerEvents[typeof PlayerEventTypes.MPEG1AUDIO_EMITTED]) {
+    this.worker.postMessage(payload as Events[typeof EventTypes.MPEG1AUDIO_EMITTED]);
   }
 };

@@ -12,17 +12,18 @@ import Decoder from '../decoder/decoder';
 import WorkerDecoder from '../decoder/worker-decoder';
 
 type PassThroughPlayerOptions = {
+  audioTrack?: number;
+  audioTransformer?: Transformer<any, any>
   source?: Source;
   bufferingStrategy?: BufferingStrategy;
   decoder?: Decoder;
-  audioTransformer?: Transformer<any, any>
 }
 
-export default class PassThroughPlayer extends Player {  
+export default class PassThroughPlayer extends Player {
   private emitter: EventEmitter;
   private options: Required<Omit<PassThroughPlayerOptions, 'audioTransformer'>> & Pick<PassThroughPlayerOptions, 'audioTransformer'>;
 
-  private source: Source; 
+  private source: Source;
   private chunker: PacketChunker | null = null;
   private demuxer: Demuxer | null = null;
   private buffering: BufferingStrategy;
@@ -38,22 +39,23 @@ export default class PassThroughPlayer extends Player {
   static isSupported () {
     return window.isSecureContext && !!(window.VideoFrame) && !!(window.AudioData) && !!(window.VideoDecoder) && !!(window.AudioDecoder) && !!(window.EncodedVideoChunk) && !!(window.EncodedAudioChunk);
   }
-  
+
   public constructor(options?: PassThroughPlayerOptions) {
     super();
 
     this.emitter = new EventEmitter();
     this.options = {
+      audioTrack: options?.audioTrack ?? 0,
       source: options?.source ?? new HTTPStreamingWorkerSource(),
       bufferingStrategy: options?.bufferingStrategy ?? new TickBasedThrottling(),
       decoder: options?.decoder ?? new WorkerDecoder(),
-      audioTransformer: options?.audioTransformer ?? undefined
+      audioTransformer: options?.audioTransformer
     };
 
     this.source = this.options.source;
     this.buffering = this.options.bufferingStrategy;
     this.buffering.setEmitter(this.emitter);
-    this.decoder = this.options.decoder; 
+    this.decoder = this.options.decoder;
     this.decoder.setEmitter(this.emitter);
 
     this.emitter.on(EventTypes.VIDEO_FRAME_DECODED, this.onVideoFrameDecodedHandler);
@@ -66,28 +68,27 @@ export default class PassThroughPlayer extends Player {
     }
 
     this.chunker = new PacketChunker(this.source.getStream());
-    this.demuxer = new Demuxer(this.chunker.getStream(), this.emitter);
+    this.demuxer = new Demuxer(this.chunker.getStream(), this.emitter, this.options.audioTrack);
     this.buffering.start();
     await this.decoder.init();
 
     return true;
   }
-  
+
   public attachMedia(media: HTMLMediaElement): void {
     this.media = media;
     this.unload();
 
-    const isAudioTransformerDefined = this.options.audioTransformer != undefined;
-
     const videoTrackGenerator = new MediaStreamTrackGenerator({ kind: 'video' });
     const audioTrackGeneratorInput = new MediaStreamTrackGenerator({ kind: 'audio' });
-    
+
     let audioTrackGeneratorOutput = null;
-   
+
     this.videoTrackGeneratorWriter = videoTrackGenerator.writable.getWriter();
     this.audioTrackGeneratorWriter = audioTrackGeneratorInput.writable.getWriter();
 
-    if (isAudioTransformerDefined) {
+    /*
+    if (this.options.audioTransformer) {
       const trackProcessor = new MediaStreamTrackProcessor({ track: audioTrackGeneratorInput });
 
       audioTrackGeneratorOutput = new MediaStreamTrackGenerator({ kind: 'audio' });
@@ -96,9 +97,10 @@ export default class PassThroughPlayer extends Player {
 
       trackProcessor.readable.pipeThrough(transformer).pipeTo(audioTrackGeneratorOutput?.writable);
     }
+    */
 
     const mediaStream = new MediaStream();
-    
+
     mediaStream.addTrack(videoTrackGenerator);
 
     if (audioTrackGeneratorOutput) mediaStream.addTrack(audioTrackGeneratorOutput);

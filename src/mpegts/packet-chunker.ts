@@ -3,7 +3,7 @@ import {
   PACKET_LENGTH
 } from './packet'
 
-export default class PacketChunker {  
+export default class PacketChunker {
   private inputReader: ReadableStreamDefaultReader<Uint8Array>;
   private restBytes: Uint8Array;
   private outputStream: ReadableStream<Uint8Array>;
@@ -56,7 +56,11 @@ export default class PacketChunker {
         return;
       }
 
-      const chunk = Uint8Array.from([... this.restBytes, ... (value ?? [])]);
+      const append = value ?? [];
+      const chunk = new Uint8Array(this.restBytes.byteLength + append.byteLength);
+      chunk.set(this.restBytes, 0);
+      chunk.set(append, this.restBytes.byteLength);
+
       let lastPosition: number | null = null;
       for (let i = 0; i < chunk.length; i++) {
         if (chunk[i] === SYNC_BYTE) {
@@ -65,14 +69,14 @@ export default class PacketChunker {
             break;
           } else {
             lastPosition = i + PACKET_LENGTH;
-            this.outputController.enqueue(chunk.slice(i, i + PACKET_LENGTH));
+            this.outputController.enqueue(chunk.subarray(i, i + PACKET_LENGTH));
             i += PACKET_LENGTH - 1;
           }
         }
       }
 
       if (lastPosition != null) {
-        this.restBytes = chunk.slice(lastPosition);
+        this.restBytes = chunk.subarray(lastPosition);
       } else {
         this.restBytes = Uint8Array.from([]);
       }
