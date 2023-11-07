@@ -13,14 +13,14 @@ import WorkerDecoder from '../decoder/worker-decoder';
 
 type PassThroughPlayerOptions = {
   audioTrack?: number;
-  audioTransformer?: Transformer<any, any>
+  audioTransformer?: Transformer;
   source?: Source;
   bufferingStrategy?: BufferingStrategy;
   decoder?: Decoder;
 }
 
 export default class PassThroughPlayer extends Player {
-  private emitter: EventEmitter;
+  private readonly emitter: EventEmitter;
   private options: Required<Omit<PassThroughPlayerOptions, 'audioTransformer'>> & Pick<PassThroughPlayerOptions, 'audioTransformer'>;
 
   private source: Source;
@@ -87,7 +87,6 @@ export default class PassThroughPlayer extends Player {
     this.videoTrackGeneratorWriter = videoTrackGenerator.writable.getWriter();
     this.audioTrackGeneratorWriter = audioTrackGeneratorInput.writable.getWriter();
 
-    /*
     if (this.options.audioTransformer) {
       const trackProcessor = new MediaStreamTrackProcessor({ track: audioTrackGeneratorInput });
 
@@ -97,7 +96,6 @@ export default class PassThroughPlayer extends Player {
 
       trackProcessor.readable.pipeThrough(transformer).pipeTo(audioTrackGeneratorOutput?.writable);
     }
-    */
 
     const mediaStream = new MediaStream();
 
@@ -135,13 +133,11 @@ export default class PassThroughPlayer extends Player {
   }
 
   public pushVideoFrame(videoFrame: VideoFrame) {
-    this.videoTrackGeneratorWriter?.write(videoFrame);
-    videoFrame.close()
+    this.videoTrackGeneratorWriter?.write(videoFrame).finally(() => videoFrame.close());
   }
 
   public pushAudioFrame(audioFrame: AudioData) {
-    this.audioTrackGeneratorWriter?.write(audioFrame);
-    audioFrame.close();
+    this.audioTrackGeneratorWriter?.write(audioFrame).finally(() => audioFrame.close());
   }
 
   private async onVideoFrameDecoded({ frame }: Events[typeof EventTypes.VIDEO_FRAME_DECODED]) {

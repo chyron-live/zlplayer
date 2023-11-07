@@ -1,6 +1,7 @@
 import EventEmitter from '../event/eventemitter';
 import { Events, EventTypes } from '../event/events';
 import Decoder from './decoder';
+import { secToMicro } from './constants';
 
 export default class WindowDecoder extends Decoder {
   private emitter: EventEmitter | null = null;
@@ -54,7 +55,7 @@ export default class WindowDecoder extends Decoder {
         });
       },
     })
-    await this.videoDecoder.configure({
+    this.videoDecoder.configure({
       codec: 'avc1.64001f', // TODO: refer sps
       hardwareAcceleration: "prefer-hardware",
     });
@@ -76,7 +77,7 @@ export default class WindowDecoder extends Decoder {
         });
       },
     });
-    await this.audioDecoder.configure({
+    this.audioDecoder.configure({
       codec: 'mp4a.40.2',
       sampleRate: 48000, // TODO: Refer ADTS Header
       numberOfChannels: 2,
@@ -89,7 +90,7 @@ export default class WindowDecoder extends Decoder {
 
     const encodedVideoChunk = new EncodedVideoChunk({
       type: has_IDR ? 'key' : 'delta',
-      timestamp: pts_timestamp * 1000000,
+      timestamp: pts_timestamp * secToMicro,
       data: data,
     });
 
@@ -107,7 +108,7 @@ export default class WindowDecoder extends Decoder {
   private async onAACEmitted({ pts_timestamp, data }: Events[typeof EventTypes.AAC_EMITTED]) {
     const encodedAudioChunk = new EncodedAudioChunk({
       type: 'key',
-      timestamp: pts_timestamp * 1000000,
+      timestamp: pts_timestamp * secToMicro,
       data: data,
     });
 
@@ -118,14 +119,14 @@ export default class WindowDecoder extends Decoder {
         event: EventTypes.AUDIO_DECODE_ERROR,
         error: e,
       });
-      this.resetAudioDecoder();
+      await this.resetAudioDecoder();
     }
   }
 
   private async onMPEG1AudioEmitted({ pts_timestamp, data }: Events[typeof EventTypes.MPEG1AUDIO_EMITTED]) {
     const encodedAudioChunk = new EncodedAudioChunk({
       type: 'key',
-      timestamp: pts_timestamp * 1000000,
+      timestamp: pts_timestamp * secToMicro,
       data: data,
     });
 
@@ -136,7 +137,7 @@ export default class WindowDecoder extends Decoder {
         event: EventTypes.AUDIO_DECODE_ERROR,
         error: e,
       });
-      this.resetAudioDecoder();
+      await this.resetAudioDecoder();
     }
   }
 };
