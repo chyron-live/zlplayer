@@ -1,4 +1,5 @@
 import { EventTypes } from './worker-decoder-events';
+import { secToMicro } from './constants';
 
 let videoDecoder: VideoDecoder | null = null;
 let audioDecoder: AudioDecoder | null = null;
@@ -24,7 +25,7 @@ const resetVideoDecoder = async () => {
       });
     },
   })
-  await videoDecoder.configure({
+  videoDecoder.configure({
     codec: 'avc1.64001f', // TODO: refer sps
     hardwareAcceleration: "prefer-hardware",
   });
@@ -48,7 +49,7 @@ const resetAudioDecoder = async (codec = aacAudioDecoderCodec) => {
     },
   });
   currentAudioDecoderCodec = codec;
-  await audioDecoder.configure({
+  audioDecoder.configure({
     codec,
     sampleRate: 48000, // TODO: Refer ADTS Header
     numberOfChannels: 2,
@@ -66,7 +67,7 @@ self.onmessage = async ({ data }) => {
 
       const encodedVideoChunk = new EncodedVideoChunk({
         type: has_IDR ? 'key' : 'delta',
-        timestamp: pts_timestamp * 1000000,
+        timestamp: pts_timestamp * secToMicro,
         data: rawData,
       });
 
@@ -87,7 +88,7 @@ self.onmessage = async ({ data }) => {
 
       const encodedAudioChunk = new EncodedAudioChunk({
         type: 'key',
-        timestamp: pts_timestamp * 1000000,
+        timestamp: pts_timestamp * secToMicro,
         data: rawData,
       });
 
