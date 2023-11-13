@@ -36,10 +36,10 @@ export default class SectionDecoder {
       const pointer_field = packet[offset + 0];
 
       if (this.chunks) {
-        this.chunks.push(packet.slice(offset + 1, offset + 1 + pointer_field));
-        
-        if (this.chunks.isFull()) {  
-          if (result == null) { result = []; }      
+        this.chunks.push(packet.subarray(offset + 1, offset + 1 + pointer_field));
+
+        if (this.chunks.isFull()) {
+          if (result == null) { result = []; }
           result.push(this.chunks.concat());
           this.chunks = null;
         } else {
@@ -50,13 +50,13 @@ export default class SectionDecoder {
       for (let begin = offset + 1 + pointer_field; begin < PACKET_LENGTH; ) {
         if (packet[begin + 0] === STUFFING_BYTE) { break; }
 
-        const length: number = this.chunks?.expect() ?? (3 + section_length(packet.slice(begin)));
+        const length: number = this.chunks?.expect() ?? (3 + section_length(packet.subarray(begin)));
         if (this.chunks == null) {
           this.chunks = new Chunks(length);
         }
         const rest: number = length - this.chunks.length();
 
-        this.chunks.push(packet.slice(begin, Math.min(begin + rest, PACKET_LENGTH)));
+        this.chunks.push(packet.subarray(begin, Math.min(begin + rest, PACKET_LENGTH)));
         if (this.chunks.isFull()) {  
           if (result == null) { result = []; }            
           result.push(this.chunks.concat());
@@ -73,7 +73,7 @@ export default class SectionDecoder {
       const begin = HEADER_LENGTH + (has_adaptation_field(packet) ? 1 : 0) + adaptation_field_length(packet);
       const length: number = this.chunks.expect()
       const rest = length - this.chunks.length();
-      this.chunks.push(packet.slice(begin, Math.min(begin + rest, PACKET_LENGTH)));
+      this.chunks.push(packet.subarray(begin, Math.min(begin + rest, PACKET_LENGTH)));
 
       if (this.chunks.isFull()) {      
         if (result == null) { result = []; }        

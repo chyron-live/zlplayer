@@ -38,15 +38,23 @@ export const has_pcr = (packet: Uint8Array): boolean => {
   if (adaptation_field_length(packet) === 0) { return false; }
   return (packet[5] & 0x10) !== 0;
 }
-export const pcr = (packet: Uint8Array): number => {
-  if (!has_pcr(packet)) { return Number.NaN; }
 
+const value1To1 = 1 << 1;
+const value1To8 = 1 << 8;
+
+const header1 = HEADER_LENGTH + 1 + 1;
+const header2 = HEADER_LENGTH + 1 + 2;
+const header3 = HEADER_LENGTH + 1 + 3;
+const header4 = HEADER_LENGTH + 1 + 4;
+const header5 = HEADER_LENGTH + 1 + 5;
+
+export const pcr = (packet: Uint8Array): number => {
   let pcr_base = 0;
-  pcr_base = (pcr_base * (1 << 8)) + ((packet[HEADER_LENGTH + 1 + 1] & 0xFF) >> 0);
-  pcr_base = (pcr_base * (1 << 8)) + ((packet[HEADER_LENGTH + 1 + 2] & 0xFF) >> 0);
-  pcr_base = (pcr_base * (1 << 8)) + ((packet[HEADER_LENGTH + 1 + 3] & 0xFF) >> 0);
-  pcr_base = (pcr_base * (1 << 8)) + ((packet[HEADER_LENGTH + 1 + 4] & 0xFF) >> 0);
-  pcr_base = (pcr_base * (1 << 1)) + ((packet[HEADER_LENGTH + 1 + 5] & 0x80) >> 7);
+  pcr_base = (pcr_base * value1To8) + ((packet[header1] & 0xFF) >> 0);
+  pcr_base = (pcr_base * value1To8) + ((packet[header2] & 0xFF) >> 0);
+  pcr_base = (pcr_base * value1To8) + ((packet[header3] & 0xFF) >> 0);
+  pcr_base = (pcr_base * value1To8) + ((packet[header4] & 0xFF) >> 0);
+  pcr_base = (pcr_base * value1To1) + ((packet[header5] & 0x80) >> 7);
 
   return pcr_base;
 }
