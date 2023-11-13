@@ -1,62 +1,80 @@
 import EventEmitter from '../event/eventemitter';
 import { Events as PlayerEvents, EventTypes as PlayerEventTypes } from '../event/events';
-import { Events, EventTypes } from './worker-decoder-events';
+import { EventTypes } from './worker-decoder-events';
 
 import Decoder from './decoder';
-import Worker from 'worker-loader?inline=no-fallback!./decoding.worker'
+import { secToMicro } from './constants';
+
+const aacAudioDecoderCodec = 'mp4a.40.2';
+const mpeg1AudioDecoderCodec = 'mp3'
 
 export default class WorkerDecoder extends Decoder {
   private emitter: EventEmitter | null = null;
-  private worker: Worker;
 
   private readonly onH264EmittedHandler = this.onH264Emitted.bind(this);
   private readonly onAACEmittedHandler = this.onAACEmitted.bind(this);
   private readonly onMPEG1AudioEmittedHandler = this.onMPEG1AudioEmitted.bind(this);
 
   static isSupported () {
-    return window.isSecureContext && !!(window.VideoFrame) && !!(window.AudioData) && !!(window.VideoDecoder) && !!(window.AudioDecoder) && !!(window.EncodedVideoChunk) && !!(window.EncodedAudioChunk) && !!(window.Worker);
+    return window.isSecureContext && !!(window.VideoFrame) && !!(window.AudioData) && !!(window.VideoDecoder) && !!(window.AudioDecoder) && !!(window.EncodedVideoChunk) && !!(window.EncodedAudioChunk);
+  }
+
+  private videoDecoder: VideoDecoder | null = null;
+  private audioDecoder: AudioDecoder | null = null;
+  private videoKeyFrameArrived: boolean = false;
+
+  private currentAudioDecoderCodec = '';
+
+  private resetVideoDecoder = async () => {
+    this.videoDecoder = new VideoDecoder({
+      output: (videoFrame) => {
+        this.emitter?.emit(PlayerEventTypes.VIDEO_FRAME_DECODED, {
+          event: PlayerEventTypes.VIDEO_FRAME_DECODED,
+          frame: videoFrame
+        });
+        videoFrame.close();
+      },
+      error: (e) => {
+        this.emitter?.emit(PlayerEventTypes.VIDEO_DECODE_ERROR, {
+          event: PlayerEventTypes.VIDEO_DECODE_ERROR,
+          error: e,
+        });
+      },
+    })
+    this.videoDecoder.configure({
+      codec: 'avc1.64001f', // TODO: refer sps
+      hardwareAcceleration: "prefer-hardware",
+      optimizeForLatency: true,
+    });
+    this.videoKeyFrameArrived = false;
+  }
+
+  private resetAudioDecoder = async (codec = aacAudioDecoderCodec) => {
+    this.audioDecoder = new AudioDecoder({
+      output: (audioFrame) => {
+        this.emitter?.emit(PlayerEventTypes.AUDIO_FRAME_DECODED, {
+          event: PlayerEventTypes.AUDIO_FRAME_DECODED,
+          frame: audioFrame
+        });
+        audioFrame.close();
+      },
+      error: (e) => {
+        this.emitter?.emit(PlayerEventTypes.AUDIO_DECODE_ERROR, {
+          event: PlayerEventTypes.AUDIO_DECODE_ERROR,
+          error: e,
+        });
+      },
+    });
+    this.currentAudioDecoderCodec = codec;
+    this.audioDecoder.configure({
+      codec,
+      sampleRate: 48000, // TODO: Refer ADTS Header
+      numberOfChannels: 2,
+    });
   }
 
   public constructor() {
     super();
-    this.worker = new Worker();
-
-    this.worker.onmessage = ((message) => {
-      const { event } = message.data;
-
-      switch(event) {
-        case EventTypes.VIDEO_FRAME_DECODED: {
-          this.emitter?.emit(PlayerEventTypes.VIDEO_FRAME_DECODED, {
-            event: PlayerEventTypes.VIDEO_FRAME_DECODED,
-            frame: message.data.frame
-          });
-          break;
-        }
-        case EventTypes.AUDIO_FRAME_DECODED: {
-          this.emitter?.emit(PlayerEventTypes.AUDIO_FRAME_DECODED, {
-            event: PlayerEventTypes.AUDIO_FRAME_DECODED,
-            frame: message.data.frame
-          });
-          break;
-        }
-        case EventTypes.VIDEO_DECODE_ERROR: {
-          const { error } = message.data;
-          this.emitter?.emit(PlayerEventTypes.VIDEO_DECODE_ERROR, {
-            event: PlayerEventTypes.VIDEO_DECODE_ERROR,
-            error,
-          });
-          break;
-        }
-        case EventTypes.AUDIO_DECODE_ERROR: {
-          const { error } = message.data;
-          this.emitter?.emit(PlayerEventTypes.AUDIO_DECODE_ERROR, {
-            event: PlayerEventTypes.AUDIO_DECODE_ERROR,
-            error,
-          });
-          break;
-        }
-      }
-    });
   }
 
   public setEmitter(emitter: EventEmitter) {
@@ -73,18 +91,77 @@ export default class WorkerDecoder extends Decoder {
   }
 
   public async init(): Promise<void> {
-    this.worker.postMessage({ event: EventTypes.DECODER_INITIALIZE });
+    await this.resetVideoDecoder();
+    await this.resetAudioDecoder();
   }
 
   private async onH264Emitted(payload: PlayerEvents[typeof PlayerEventTypes.H264_EMITTED]) {
-    this.worker.postMessage(payload as Events[typeof EventTypes.H264_EMITTED]);
+    const { pts_timestamp, data: rawData, has_IDR } = payload;
+
+    this.videoKeyFrameArrived ||= has_IDR;
+    if (!this.videoKeyFrameArrived) { return; }
+
+    const encodedVideoChunk = new EncodedVideoChunk({
+      type: has_IDR ? 'key' : 'delta',
+      timestamp: pts_timestamp * secToMicro,
+      data: rawData,
+    });
+
+    try {
+      this.videoDecoder?.decode(encodedVideoChunk);
+    } catch (e: unknown) {
+      this.emitter?.emit(EventTypes.VIDEO_DECODE_ERROR, {
+        event: EventTypes.VIDEO_DECODE_ERROR,
+        error: e,
+      });
+      await this.resetVideoDecoder();
+    }
+
   }
 
   private async onAACEmitted(payload: PlayerEvents[typeof PlayerEventTypes.AAC_EMITTED]) {
-    this.worker.postMessage(payload as Events[typeof EventTypes.AAC_EMITTED]);
+    const { pts_timestamp, data: rawData } = payload;
+
+    const encodedAudioChunk = new EncodedAudioChunk({
+      type: 'key',
+      timestamp: pts_timestamp * secToMicro,
+      data: rawData,
+    });
+
+    try {
+      if (this.currentAudioDecoderCodec !== aacAudioDecoderCodec) {
+        await this.resetAudioDecoder(aacAudioDecoderCodec);
+      }
+      this.audioDecoder?.decode(encodedAudioChunk);
+    } catch (e: unknown) {
+      this.emitter?.emit(EventTypes.AUDIO_DECODE_ERROR, {
+        event: EventTypes.AUDIO_DECODE_ERROR,
+        error: e,
+      });
+      await this.resetAudioDecoder();
+    }
   }
 
   private async onMPEG1AudioEmitted(payload: PlayerEvents[typeof PlayerEventTypes.MPEG1AUDIO_EMITTED]) {
-    this.worker.postMessage(payload as Events[typeof EventTypes.MPEG1AUDIO_EMITTED]);
+    const { pts_timestamp, data: rawData } = payload;
+
+    const encodedAudioChunk = new EncodedAudioChunk({
+      type: 'key',
+      timestamp: pts_timestamp * secToMicro,
+      data: rawData,
+    });
+
+    try {
+      if (this.currentAudioDecoderCodec !== mpeg1AudioDecoderCodec) {
+        await this.resetAudioDecoder(mpeg1AudioDecoderCodec);
+      }
+      this.audioDecoder?.decode(encodedAudioChunk);
+    } catch (e: unknown) {
+      this.emitter?.emit(EventTypes.AUDIO_DECODE_ERROR, {
+        event: EventTypes.AUDIO_DECODE_ERROR,
+        error: e,
+      });
+      await this.resetAudioDecoder();
+    }
   }
 };
